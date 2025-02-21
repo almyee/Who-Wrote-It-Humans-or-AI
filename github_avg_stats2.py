@@ -7,9 +7,16 @@ from datetime import datetime as dt
 import matplotlib.pyplot as plt
 from matplotlib.dates import date2num
 import numpy as np
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+
+# Access the variables
+GITHUB_TOKEN = os.getenv("GITHUB_ACCESS_TOKEN")
 
 # Constants
-GITHUB_TOKEN = # Replace with your GitHub token
+# GITHUB_TOKEN = # Replace with your GitHub token
 HEADERS = {"Authorization": f"token {GITHUB_TOKEN}"}
 
 # Fetch data from GitHub API
