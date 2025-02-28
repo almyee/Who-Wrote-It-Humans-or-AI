@@ -219,6 +219,6 @@ if __name__ == "__main__":
     avg_before_nov_2022 = sum(before_nov_2022_churn) / len(before_nov_2022_churn) if before_nov_2022_churn else 0
     avg_after_nov_2022 = sum(after_nov_2022_churn) / len(after_nov_2022_churn) if after_nov_2022_churn else 0
 
-    print("Avg commits before November 2022: ", avg_before_nov_2022)
-    print("Avg commits after November 2022: ", avg_after_nov_2022)
+    print("Avg churn before November 2022: ", avg_before_nov_2022)
+    print("Avg churn after November 2022: ", avg_after_nov_2022)
     plot_stats(months, avg_churn)
