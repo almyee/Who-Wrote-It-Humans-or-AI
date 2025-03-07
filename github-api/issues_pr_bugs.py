@@ -247,7 +247,7 @@ def compute_averages(data):
 
 # Main execution
 if __name__ == "__main__":
-    folder_path = "./repos/all"  # Path to your local folder of repos
+    folder_path = "./repos/test"  # Path to your local folder of repos
     averaged_stats = process_repos_in_folder(folder_path)
     # print("avg stats: ", averaged_stats)
     # Compute averages for each category
@@ -268,4 +268,4 @@ if __name__ == "__main__":
         print(f"{category}:")
         print(f"  Avg before Nov 2022: {avg_data['avg_before_nov_2022']}")
         print(f"  Avg after Nov 2022: {avg_data['avg_after_nov_2022']}")
-    # plot_stats(averaged_stats)
+    plot_stats(averaged_stats)
