@@ -12,9 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Access the variables
-GITHUB_TOKEN = os.getenv("GITHUB_ACCESS_TOKEN")
-# Constants
-# GITHUB_TOKEN = 
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+# print(os.getenv("GITHUB_TOKEN"))  # Should print the token (or part of it)
 HEADERS = {"Authorization": f"token {GITHUB_TOKEN}"}
 
 # Fetch data from GitHub API
@@ -89,19 +88,60 @@ def get_issue_and_pr_stats(owner, repo):
         "pr_close_times": pr_close_times
     }
 
+# # Process all repositories in a folder
+# def process_repos_in_folder(folder_path):
+#     repo_stats = defaultdict(lambda: defaultdict(list))  # Nested dict to store per-month data
+
+#     for repo_dir in os.listdir(folder_path):
+#         repo_path = os.path.join(folder_path, repo_dir)
+#         if os.path.isdir(repo_path):
+#             parts = repo_dir.split('/')  # Assuming folder name is 'owner/repo'
+#             if len(parts) == 2:
+#                 owner, repo = parts
+#             else:
+#                 print(f"Skipping invalid directory name: {repo_dir}")
+#                 continue
+
+#             print(f"Processing {owner}/{repo}...")
+#             stats = get_issue_and_pr_stats(owner, repo)
+
+#             for key, value in stats.items():
+#                 if isinstance(value, dict):  
+#                     # Handle dictionary-type stats (per-month counts)
+#                     for month, count in value.items():
+#                         repo_stats[key][month].append(count)
+#                 elif isinstance(value, list):  
+#                     # Handle list-type stats (e.g., issue close times)
+#                     repo_stats[key]["all"].extend(value)  
+#                 else:  
+#                     # Handle scalar values (e.g., avg close time, which we no longer use)
+#                     repo_stats[key]["all"].append(value)
+
+#     # Compute averages for dictionary-type stats
+#     averaged_stats = {}
+#     for key, monthly_data in repo_stats.items():
+#         if isinstance(monthly_data, dict):
+#             averaged_stats[key] = {
+#                 month: sum(values) / len(values) for month, values in monthly_data.items() if values
+#             }
+#         else:
+#             averaged_stats[key] = sum(monthly_data) / len(monthly_data) if monthly_data else 0
+
+#     return averaged_stats
+
 # Process all repositories in a folder
 def process_repos_in_folder(folder_path):
     repo_stats = defaultdict(lambda: defaultdict(list))  # Nested dict to store per-month data
 
-    for repo_dir in os.listdir(folder_path):
-        repo_path = os.path.join(folder_path, repo_dir)
-        if os.path.isdir(repo_path):
-            parts = repo_dir.split(':')  # Assuming folder name is 'owner/repo'
-            if len(parts) == 2:
-                owner, repo = parts
-            else:
-                print(f"Skipping invalid directory name: {repo_dir}")
-                continue
+    for owner in os.listdir(folder_path):  # First level: Owner folders
+        owner_path = os.path.join(folder_path, owner)
+        if not os.path.isdir(owner_path):
+            continue  # Skip if it's not a folder
+
+        for repo in os.listdir(owner_path):  # Second level: Repo folders
+            repo_path = os.path.join(owner_path, repo)
+            if not os.path.isdir(repo_path):
+                continue  # Skip if it's not a folder
 
             print(f"Processing {owner}/{repo}...")
             stats = get_issue_and_pr_stats(owner, repo)
@@ -129,6 +169,7 @@ def process_repos_in_folder(folder_path):
             averaged_stats[key] = sum(monthly_data) / len(monthly_data) if monthly_data else 0
 
     return averaged_stats
+
 
 import matplotlib.pyplot as plt
 from datetime import datetime as dt
@@ -225,47 +266,49 @@ def plot_stats(stats):
 
 # Function to compute averages before and after a given date
 def compute_averages(data):
-    before = []
-    after = []
+    # before = []
+    all = []
     # Define threshold date
-    threshold_date = dt(2022, 11, 1)
+    # threshold_date = dt(2022, 11, 1)
     for date_str, value in data.items():
         # Check if the key matches the YYYY-MM format
         if not re.match(r"^\d{4}-\d{2}$", date_str):
             continue  # Skip non-date keys like 'all'
         # Convert YYYY-MM to datetime object
         date_obj = dt.strptime(date_str, "%Y-%m")
-        if date_obj < threshold_date:
-            before.append(value)
-        else:
-            after.append(value)
+        # if date_obj < threshold_date:
+        #     before.append(value)
+        # else:
+        all.append(value)
     
-    avg_before = sum(before) / len(before) if before else 0
-    avg_after = sum(after) / len(after) if after else 0
+    # avg_before = sum(before) / len(before) if before else 0
+    avg_all = sum(all) / len(all) if all else 0
 
-    return avg_before, avg_after
+    return avg_all
 
 # Main execution
 if __name__ == "__main__":
-    folder_path = "/Users/alyssayee/ecs260/repos/test"  # Path to your local folder of repos
-    averaged_stats = process_repos_in_folder(folder_path)
-    # print("avg stats: ", averaged_stats)
+    folder_path =   "test_repos" # "../cloned_commits"  # Path to your local folder of repos
+    folder_stats = {}
+    for folder in os.listdir(folder_path):
+        print("date: ", folder)
+        folder_full_path = os.path.join(folder_path, folder)
+        
+        if os.path.isdir(folder_full_path):  # Check if it's a directory
+            averaged_stats = process_repos_in_folder(folder_full_path)  # Run your function
+            print("averaged_stats: ", averaged_stats)    
     # Compute averages for each category
     # Iterate through averaged_stats and find fields containing 'all'
-    for field, data in averaged_stats.items():
-        if 'all' in data:
-            print(f"{field}: {data['all']}")
-    averages = {}
-    for category, data in averaged_stats.items():
-        avg_before, avg_after = compute_averages(data)
-        averages[category] = {
-            "avg_before_nov_2022": avg_before,
-            "avg_after_nov_2022": avg_after
-        }
+        for field, data in averaged_stats.items():
+            if 'all' in data:
+                print(f"{field}: {data['all']}")
 
-    # Print results
-    for category, avg_data in averages.items():
-        print(f"{category}:")
-        print(f"  Avg before Nov 2022: {avg_data['avg_before_nov_2022']}")
-        print(f"  Avg after Nov 2022: {avg_data['avg_after_nov_2022']}")
-    plot_stats(averaged_stats)
+        for category, data in averaged_stats.items():
+            if 'all' in data:
+                print(f"{category}: {data['all']}")
+                continue
+            avg_data = compute_averages(data)
+            print("avg ", category, ": ", avg_data)
+   
+
+        plot_stats(averaged_stats)
