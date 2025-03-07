@@ -132,17 +132,18 @@ def get_issue_and_pr_stats(owner, repo):
 # Process all repositories in a folder
 def process_repos_in_folder(folder_path):
     repo_stats = defaultdict(lambda: defaultdict(list))  # Nested dict to store per-month data
-
+    count = 0
     for owner in os.listdir(folder_path):  # First level: Owner folders
         owner_path = os.path.join(folder_path, owner)
         if not os.path.isdir(owner_path):
             continue  # Skip if it's not a folder
-
+        count += 1
+        if (count > 2):
+                break
         for repo in os.listdir(owner_path):  # Second level: Repo folders
             repo_path = os.path.join(owner_path, repo)
             if not os.path.isdir(repo_path):
                 continue  # Skip if it's not a folder
-
             print(f"Processing {owner}/{repo}...")
             stats = get_issue_and_pr_stats(owner, repo)
 
@@ -161,6 +162,7 @@ def process_repos_in_folder(folder_path):
     # Compute averages for dictionary-type stats
     averaged_stats = {}
     for key, monthly_data in repo_stats.items():
+        print("key: ", key)
         if isinstance(monthly_data, dict):
             averaged_stats[key] = {
                 month: sum(values) / len(values) for month, values in monthly_data.items() if values
@@ -285,18 +287,31 @@ def compute_averages(data):
     avg_all = sum(all) / len(all) if all else 0
 
     return avg_all
+def merge_averaged_stats(*folders):
+    merged_stats = defaultdict(dict)
+
+    for folder in folders:
+        for category, data in folder.items():
+            if category not in merged_stats:
+                merged_stats[category] = {}
+            for date, value in data.items():
+                merged_stats[category][date] = value  # Overwrites if duplicate, but should be the same
+    
+    return dict(merged_stats)
 
 # Main execution
 if __name__ == "__main__":
-    folder_path =   "test_repos" # "../cloned_commits"  # Path to your local folder of repos
+    folder_path =   "test_repos" #"../cloned_commits" # Path to your local folder of repos
     folder_stats = {}
+    merge_avg = {}
     for folder in os.listdir(folder_path):
         print("date: ", folder)
         folder_full_path = os.path.join(folder_path, folder)
         
         if os.path.isdir(folder_full_path):  # Check if it's a directory
             averaged_stats = process_repos_in_folder(folder_full_path)  # Run your function
-            print("averaged_stats: ", averaged_stats)    
+            # print("averaged_stats: ", averaged_stats)    
+            merge_avg = merge_averaged_stats(merge_avg, averaged_stats)
     # Compute averages for each category
     # Iterate through averaged_stats and find fields containing 'all'
         for field, data in averaged_stats.items():
@@ -310,5 +325,5 @@ if __name__ == "__main__":
             avg_data = compute_averages(data)
             print("avg ", category, ": ", avg_data)
    
-
-        plot_stats(averaged_stats)
+    # print("merge_avg: ", merge_avg)
+    plot_stats(merge_avg)
