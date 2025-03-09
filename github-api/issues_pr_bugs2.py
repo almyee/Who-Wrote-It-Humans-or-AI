@@ -1,3 +1,4 @@
+# this code was used to generate the pr/issue/bug graph from our final report
 import os
 from collections import defaultdict
 import requests
@@ -24,8 +25,8 @@ def fetch_github_data(endpoint, owner, repo, params={}):
     while url:
         response = requests.get(url, headers=HEADERS, params=params)
         if response.status_code != 200:
-            print(f"Error: {response.json()}")
-            break
+            # print(f"Error: {response.json()}")
+            break #return None # 
         results.extend(response.json())
         url = response.links.get("next", {}).get("url")  # Handle pagination
     return results
@@ -34,10 +35,9 @@ def fetch_github_data(endpoint, owner, repo, params={}):
 def to_month(date_str):
     return date_str[:7] if date_str else None  # Extract YYYY-MM
 
-# Get issue and PR statistics
-def get_issue_and_pr_stats(owner, repo):
+def get_issue_and_pr_stats(owner, repo): #new
     data = fetch_github_data("issues", owner, repo, {"state": "all"})
-
+    # print("fetched github data")
     opened_issues = defaultdict(int)
     closed_issues = defaultdict(int)
     opened_prs = defaultdict(int)
@@ -45,38 +45,48 @@ def get_issue_and_pr_stats(owner, repo):
     bug_issues = defaultdict(int)
     issue_close_times = []
     pr_close_times = []
+    comments_per_issue = defaultdict(int)
+    comments_per_pr = defaultdict(int)
+    reviewers_per_pr = defaultdict(int)
 
     for item in data:
         created_month = to_month(item.get("created_at"))
         closed_month = to_month(item.get("closed_at"))
-
+        num_comments = item.get("comments", 0)
+        pr_number = item["number"]
+        reviews_data = fetch_github_data(f"pulls/{pr_number}/reviews", owner, repo)  
+        if reviews_data is not None: #else
+            reviewers = {review["user"]["login"] for review in reviews_data}
+            num_actual_reviewers = len(reviewers)
+            # print(f"PR #{pr_number} has {num_actual_reviewers} actual reviewers.")
         if "pull_request" in item:  # It's a PR
             if created_month:
-                opened_prs[created_month] += 1
+                # opened_prs[created_month] += 1
+                comments_per_pr[created_month] += num_comments
+                reviewers_per_pr[created_month] += num_actual_reviewers
             if closed_month:
                 closed_prs[closed_month] += 1
-
-            # Track PR close times
             if item.get("closed_at"):
                 opened_time = dt.strptime(item["created_at"], "%Y-%m-%dT%H:%M:%SZ")
                 closed_time = dt.strptime(item["closed_at"], "%Y-%m-%dT%H:%M:%SZ")
-                pr_close_times.append((closed_time - opened_time).total_seconds() / 86400)  # Convert to days
+                pr_close_times.append((closed_time - opened_time).total_seconds() / 86400)
         else:  # It's an issue
             if created_month:
                 opened_issues[created_month] += 1
+                comments_per_issue[created_month] += num_comments
             if closed_month:
                 closed_issues[closed_month] += 1
 
-            # Track issue close times
             if item.get("closed_at"):
                 opened_time = dt.strptime(item["created_at"], "%Y-%m-%dT%H:%M:%SZ")
                 closed_time = dt.strptime(item["closed_at"], "%Y-%m-%dT%H:%M:%SZ")
-                issue_close_times.append((closed_time - opened_time).total_seconds() / 86400)  # Convert to days
+                issue_close_times.append((closed_time - opened_time).total_seconds() / 86400)
 
-            # Track bug-related issues
             labels = [label["name"].lower() for label in item.get("labels", [])]
             if "bug" in labels:
                 bug_issues[created_month] += 1
+    # print("done sorting data")
+    # print("got comments/stat and reviers/stat")
 
     return {
         "opened_issues": dict(opened_issues),
@@ -85,49 +95,11 @@ def get_issue_and_pr_stats(owner, repo):
         "closed_prs": dict(closed_prs),
         "bug_issues": dict(bug_issues),
         "issue_close_times": issue_close_times,
-        "pr_close_times": pr_close_times
+        "pr_close_times": pr_close_times,
+        "comments_per_issue": dict(comments_per_issue),
+        "comments_per_pr": dict(comments_per_pr),
+        "reviewers_per_pr": dict(reviewers_per_pr)
     }
-
-# # Process all repositories in a folder
-# def process_repos_in_folder(folder_path):
-#     repo_stats = defaultdict(lambda: defaultdict(list))  # Nested dict to store per-month data
-
-#     for repo_dir in os.listdir(folder_path):
-#         repo_path = os.path.join(folder_path, repo_dir)
-#         if os.path.isdir(repo_path):
-#             parts = repo_dir.split('/')  # Assuming folder name is 'owner/repo'
-#             if len(parts) == 2:
-#                 owner, repo = parts
-#             else:
-#                 print(f"Skipping invalid directory name: {repo_dir}")
-#                 continue
-
-#             print(f"Processing {owner}/{repo}...")
-#             stats = get_issue_and_pr_stats(owner, repo)
-
-#             for key, value in stats.items():
-#                 if isinstance(value, dict):  
-#                     # Handle dictionary-type stats (per-month counts)
-#                     for month, count in value.items():
-#                         repo_stats[key][month].append(count)
-#                 elif isinstance(value, list):  
-#                     # Handle list-type stats (e.g., issue close times)
-#                     repo_stats[key]["all"].extend(value)  
-#                 else:  
-#                     # Handle scalar values (e.g., avg close time, which we no longer use)
-#                     repo_stats[key]["all"].append(value)
-
-#     # Compute averages for dictionary-type stats
-#     averaged_stats = {}
-#     for key, monthly_data in repo_stats.items():
-#         if isinstance(monthly_data, dict):
-#             averaged_stats[key] = {
-#                 month: sum(values) / len(values) for month, values in monthly_data.items() if values
-#             }
-#         else:
-#             averaged_stats[key] = sum(monthly_data) / len(monthly_data) if monthly_data else 0
-
-#     return averaged_stats
 
 # Process all repositories in a folder
 def process_repos_in_folder(folder_path):
@@ -137,16 +109,17 @@ def process_repos_in_folder(folder_path):
         owner_path = os.path.join(folder_path, owner)
         if not os.path.isdir(owner_path):
             continue  # Skip if it's not a folder
-        count += 1
-        if (count > 2):
-                break
+        # count += 1
+        # if (count > 2):
+        #         break
         for repo in os.listdir(owner_path):  # Second level: Repo folders
             repo_path = os.path.join(owner_path, repo)
             if not os.path.isdir(repo_path):
+                # print("not a repo")
                 continue  # Skip if it's not a folder
-            print(f"Processing {owner}/{repo}...")
+            # print(f"Processing {owner}/{repo}...")
             stats = get_issue_and_pr_stats(owner, repo)
-
+            # print("got issue and pr stats")
             for key, value in stats.items():
                 if isinstance(value, dict):  
                     # Handle dictionary-type stats (per-month counts)
@@ -162,7 +135,7 @@ def process_repos_in_folder(folder_path):
     # Compute averages for dictionary-type stats
     averaged_stats = {}
     for key, monthly_data in repo_stats.items():
-        print("key: ", key)
+        # print("key: ", key)
         if isinstance(monthly_data, dict):
             averaged_stats[key] = {
                 month: sum(values) / len(values) for month, values in monthly_data.items() if values
@@ -171,10 +144,6 @@ def process_repos_in_folder(folder_path):
             averaged_stats[key] = sum(monthly_data) / len(monthly_data) if monthly_data else 0
 
     return averaged_stats
-
-
-import matplotlib.pyplot as plt
-from datetime import datetime as dt
 
 def plot_stats(stats):
     # Define full month range
@@ -190,8 +159,6 @@ def plot_stats(stats):
     ]
     gpt_dates_dt = [dt.strptime((date[1]), "%Y-%m") for date in gpt_dates]
     gpt_dates_num = [date2num(gpt_date) for gpt_date in gpt_dates_dt]
-    # Find the index positions of GPT release dates in xmonths_complete
-    # gpt_indices = [xmonths_complete.index(date[1]) for date in gpt_dates if date[1] in xmonths_complete]
     # Generate all months in range
     xmonths_complete_dt = []
     current_dt = start_dt
@@ -217,14 +184,15 @@ def plot_stats(stats):
     opened_prs = fill_missing(stats.get("opened_prs", {}))
     closed_prs = fill_missing(stats.get("closed_prs", {}))
     bug_issues = fill_missing(stats.get("bug_issues", {}))
-
+    comments_per_pr = fill_missing(stats.get("comments_per_pr", {}))
+    comments_per_issue = fill_missing(stats.get("comments_per_issue", {}))
+    reviewers_per_pr = fill_missing(stats.get("reviewers_per_pr", {}))
     # Select labels every 3 months
     tick_labels = xmonths_complete[::3]
     tick_positions = list(range(0, len(xmonths_complete), 3))
 
     # Plot Data
-    plt.figure(figsize=(10, 8))
-
+    plt.figure(figsize=(10, 8)) # prs/time. issues/time, bugs/time graphs
     plt.subplot(3, 1, 1)
     plt.plot(xmonths_numeric, opened_issues, linestyle="-", color="red", alpha=0.6, linewidth=2, label="Average Opened Issues")
     plt.plot(xmonths_numeric, closed_issues, linestyle="-", color="blue", alpha=0.6, linewidth=2, label="Average Closed Issues")
@@ -266,21 +234,57 @@ def plot_stats(stats):
     plt.tight_layout()
     plt.show()
 
+    plt.figure(figsize=(10, 8)) # comments/pr, comments/issue. reviewers/pr graphs
+    plt.subplot(3, 1, 1)
+    plt.plot(xmonths_numeric, comments_per_pr, linestyle="-", color="red", alpha=0.6, linewidth=2, label="Average Comments Per PR")
+    for i, (label, date_num) in enumerate(zip([d[0] for d in gpt_dates], gpt_dates_num)):
+        plt.axvline(x=date_num, color='orange', linestyle='--', linewidth=1, label= f"({i+1}) " + label)
+        plt.text(date_num + 0.5, plt.ylim()[1] * 0.88, f"({i+1})", color='orange', rotation=0, verticalalignment='bottom', horizontalalignment='left')
+    plt.xlabel("Months")
+    plt.ylabel("Number of Comments per PR")
+    plt.title("Comments Per Pull Request Over Time")
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.tight_layout(pad=5.0)
+    plt.xticks(xmonths_numeric[::3], tick_labels, rotation=45)
+
+    plt.subplot(3, 1, 2)
+    plt.plot(xmonths_numeric, comments_per_issue, linestyle="-", color="blue", alpha=0.6, linewidth=2, label="Average Comments Per Issue")
+    for i, (label, date_num) in enumerate(zip([d[0] for d in gpt_dates], gpt_dates_num)):
+        plt.axvline(x=date_num, color='orange', linestyle='--', linewidth=1, label=f"({i+1}) " + label)
+        plt.text(date_num + 0.5, plt.ylim()[1] * 0.88, f"({i+1})", color='orange', rotation=0, verticalalignment='bottom', horizontalalignment='left')
+    plt.xlabel("Months")
+    plt.ylabel("Number of Comments per Issue")
+    plt.title("Comments Per Issue Over Time")
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.tight_layout(pad=5.0)
+    plt.xticks(xmonths_numeric[::3], tick_labels, rotation=45)
+
+    plt.subplot(3, 1, 3)
+    plt.plot(xmonths_numeric, reviewers_per_pr, linestyle="-", color="blue", alpha=0.6, linewidth=2, label="Average Reviewers Per PR")
+    for i, (label, date_num) in enumerate(zip([d[0] for d in gpt_dates], gpt_dates_num)):
+        plt.axvline(x=date_num, color='orange', linestyle='--', linewidth=1, label=f"({i+1}) " + label)
+        plt.text(date_num + 0.5, plt.ylim()[1] * 0.88, f"({i+1})", color='orange', rotation=0, verticalalignment='bottom', horizontalalignment='left')
+    plt.xlabel("Months")
+    plt.ylabel("Number of Reviewers Per PR")
+    plt.title("Reviewers Per Pull Request Over Time")
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.tight_layout(pad=5.0)
+    plt.xticks(xmonths_numeric[::3], tick_labels, rotation=45)
+
+    plt.tight_layout()
+    plt.show()
+
 # Function to compute averages before and after a given date
 def compute_averages(data):
     # before = []
     all = []
     # Define threshold date
-    # threshold_date = dt(2022, 11, 1)
     for date_str, value in data.items():
         # Check if the key matches the YYYY-MM format
         if not re.match(r"^\d{4}-\d{2}$", date_str):
             continue  # Skip non-date keys like 'all'
         # Convert YYYY-MM to datetime object
         date_obj = dt.strptime(date_str, "%Y-%m")
-        # if date_obj < threshold_date:
-        #     before.append(value)
-        # else:
         all.append(value)
     
     # avg_before = sum(before) / len(before) if before else 0
@@ -299,13 +303,14 @@ def merge_averaged_stats(*folders):
     
     return dict(merged_stats)
 
+
 # Main execution
 if __name__ == "__main__":
-    folder_path =   "test_repos" #"../cloned_commits" # Path to your local folder of repos
+    folder_path =   "test_repo" # Path to your local folder of repos
     folder_stats = {}
     merge_avg = {}
     for folder in os.listdir(folder_path):
-        print("date: ", folder)
+        # print("date: ", folder)
         folder_full_path = os.path.join(folder_path, folder)
         
         if os.path.isdir(folder_full_path):  # Check if it's a directory
