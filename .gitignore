@@ -1,3 +1,6 @@
 .env
 cloned_commits/
 temp/
+../github-api/test_repos/
+../github-api/test_repo/
+../.DS_Store
