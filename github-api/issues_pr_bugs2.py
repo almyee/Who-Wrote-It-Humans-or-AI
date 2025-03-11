@@ -37,7 +37,7 @@ def to_month(date_str):
 
 def get_issue_and_pr_stats(owner, repo): #new
     data = fetch_github_data("issues", owner, repo, {"state": "all"})
-    # print("fetched github data")
+    print("fetched github data")
     opened_issues = defaultdict(int)
     closed_issues = defaultdict(int)
     opened_prs = defaultdict(int)
@@ -54,16 +54,16 @@ def get_issue_and_pr_stats(owner, repo): #new
         closed_month = to_month(item.get("closed_at"))
         num_comments = item.get("comments", 0)
         pr_number = item["number"]
-        reviews_data = fetch_github_data(f"pulls/{pr_number}/reviews", owner, repo)  
-        if reviews_data is not None: #else
-            reviewers = {review["user"]["login"] for review in reviews_data}
-            num_actual_reviewers = len(reviewers)
+        # reviews_data = fetch_github_data(f"pulls/{pr_number}/reviews", owner, repo)  
+        # if reviews_data is not None: #else
+        #     reviewers = {review["user"]["login"] for review in reviews_data}
+        #     num_actual_reviewers = len(reviewers)
             # print(f"PR #{pr_number} has {num_actual_reviewers} actual reviewers.")
         if "pull_request" in item:  # It's a PR
             if created_month:
-                # opened_prs[created_month] += 1
+                opened_prs[created_month] += 1
                 comments_per_pr[created_month] += num_comments
-                reviewers_per_pr[created_month] += num_actual_reviewers
+                # reviewers_per_pr[created_month] += num_actual_reviewers
             if closed_month:
                 closed_prs[closed_month] += 1
             if item.get("closed_at"):
@@ -72,7 +72,7 @@ def get_issue_and_pr_stats(owner, repo): #new
                 pr_close_times.append((closed_time - opened_time).total_seconds() / 86400)
         else:  # It's an issue
             if created_month:
-                opened_issues[created_month] += 1
+                # opened_issues[created_month] += 1
                 comments_per_issue[created_month] += num_comments
             if closed_month:
                 closed_issues[closed_month] += 1
@@ -85,7 +85,7 @@ def get_issue_and_pr_stats(owner, repo): #new
             labels = [label["name"].lower() for label in item.get("labels", [])]
             if "bug" in labels:
                 bug_issues[created_month] += 1
-    # print("done sorting data")
+    print("done sorting data")
     # print("got comments/stat and reviers/stat")
 
     return {
@@ -103,6 +103,7 @@ def get_issue_and_pr_stats(owner, repo): #new
 
 # Process all repositories in a folder
 def process_repos_in_folder(folder_path):
+    print("in process repos")
     repo_stats = defaultdict(lambda: defaultdict(list))  # Nested dict to store per-month data
     count = 0
     for owner in os.listdir(folder_path):  # First level: Owner folders
@@ -118,8 +119,9 @@ def process_repos_in_folder(folder_path):
                 # print("not a repo")
                 continue  # Skip if it's not a folder
             # print(f"Processing {owner}/{repo}...")
+            print("owner, repo name: ", owner, repo)
             stats = get_issue_and_pr_stats(owner, repo)
-            # print("got issue and pr stats")
+            print("got issue and pr stats: ", stats)
             for key, value in stats.items():
                 if isinstance(value, dict):  
                     # Handle dictionary-type stats (per-month counts)
@@ -306,24 +308,34 @@ def merge_averaged_stats(*folders):
 
 # Main execution
 if __name__ == "__main__":
-    folder_path =   "test_repo" # Path to your local folder of repos
+    folder_path =   "../cloned_commits" #"test_repo" # Path to your local folder of repos
     folder_stats = {}
     merge_avg = {}
     for folder in os.listdir(folder_path):
-        # print("date: ", folder)
+        print("date: ", folder)
         folder_full_path = os.path.join(folder_path, folder)
-        
         if os.path.isdir(folder_full_path):  # Check if it's a directory
+            print("folder_full_path: ", folder_full_path)
+            # for folder2 in os.listdir(folder_full_path):
+            #     # print("date: ", folder2)
+            #     folder_full_path2 = os.path.join(folder_full_path, folder2)
+            #     if os.path.isdir(folder_full_path2):  # Check if it's a directory
+            #         for folder3 in os.listdir(folder_full_path2):
+            #             # print("date: ", folder2)
+            #             folder_full_path3 = os.path.join(folder_full_path2, folder3)
+            #             if os.path.isdir(folder_full_path3):  # Check if it's a directory
+                            # print("folder_full_path: ", folder_full_path3)
             averaged_stats = process_repos_in_folder(folder_full_path)  # Run your function
-            # print("averaged_stats: ", averaged_stats)    
+            print("averaged_stats: ", averaged_stats)    
             merge_avg = merge_averaged_stats(merge_avg, averaged_stats)
-    # Compute averages for each category
-    # Iterate through averaged_stats and find fields containing 'all'
+        # Compute averages for each category
+        # Iterate through averaged_stats and find fields containing 'all'
         for field, data in averaged_stats.items():
             if 'all' in data:
                 print(f"{field}: {data['all']}")
-
+        print("before loop")
         for category, data in averaged_stats.items():
+            print("in loop")
             if 'all' in data:
                 print(f"{category}: {data['all']}")
                 continue
