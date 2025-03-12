@@ -55,7 +55,7 @@ def analyze_ai_code(file_paths):
     return keyword_counts, struct_patterns
 
 # Function to save results to a text file
-def save_results(output_file, ai_files, keyword_counts, struct_patterns):
+def save_results(output_file, ai_files, keyword_counts, struct_patterns, num_repos):
     print("keyword_counts, struct_patterns: ", keyword_counts, struct_patterns)
     with open(output_file, "w", encoding="utf-8") as f:
         f.write("AI-Generated Files:\n")
@@ -64,19 +64,21 @@ def save_results(output_file, ai_files, keyword_counts, struct_patterns):
         
         f.write("\nKeyword Analysis:\n")
         for keyword, count in keyword_counts.items():
-            f.write(f"  {keyword}: {count}\n")
+            f.write(f"  {keyword}: {count/num_repos}\n")
         
         f.write("\nStructural Patterns:\n")
         for pattern, count in struct_patterns.items():
-            f.write(f"  {pattern}: {count}\n")
+            f.write(f"  {pattern}: {count/num_repos}\n")
 
 # Main execution
-folder_path = "../cloned_commits/2024-03-06" #"./before_ai" 2024-03-06 2022-11-29
+folder_path = "../cloned_commits/2022-11-29" #"./before_ai" 2024-03-06 2022-11-29
 output_file = "ai_code_analysis.txt"
 keywords_dict = {}
 struct_dict = {}
+num_repos = 0
 for folder in os.listdir(folder_path): #folder = date
         # print("date: ", folder)
+        num_repos += 1
         merged_churn_per_date = []
         # all_repos = [os.path.join(repoFolder, d) for d in os.listdir(repoFolder) if os.path.isdir(os.path.join(repoFolder, d))]
         combined_data = {}
@@ -112,7 +114,8 @@ for folder in os.listdir(folder_path): #folder = date
                             struct_dict[structp] += count
                         else:
                             struct_dict[structp] = count
-save_results(output_file, folder_full_path3, keywords_dict, struct_dict)
+    
+save_results(output_file, folder_full_path3, keywords_dict, struct_dict, num_repos)
 
 print(f"Analysis complete. Results saved to {output_file}")
 
