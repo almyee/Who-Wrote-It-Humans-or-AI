@@ -21,17 +21,6 @@ def createMonthList(startDate: datetime, endDate: datetime, stepSize: relativede
     monthList.append(endDate)
     return monthList
 
-# def getFirstLastCommitDate(repoPath: str):
-#     # print("in get first/last commit")
-#     startDate, endDate = None, None
-#     # print("before calling Repo with pydriller, repoPath: ", repoPath)
-#     for commit in Repository(path_to_repo=repoPath).traverse_commits():
-#         if startDate is None:
-#             startDate = commit.author_date
-#         else:
-#             endDate = commit.author_date
-#     # print("after calling Repo with pydriller")
-#     return startDate, endDate
 
 def getFirstLastCommitDate(repoPath: str):
     startDate, endDate = None, None
@@ -134,15 +123,15 @@ def plot_stats(months, avg_commits):
             avg_commits_by_quarter.append(np.nan)  # Preserve gaps
 
     plt.figure(figsize=(10, 5))
-    plt.plot(xquarters_numeric, avg_commits_by_quarter, label="Average Commits", color='blue', linestyle='-', marker='o')
+    plt.plot(xquarters_numeric, avg_commits_by_quarter, label="Average Churn", color='blue', linestyle='-', marker='o')
 
     for i, (label, date_num) in enumerate(zip([d[0] for d in gpt_dates], gpt_dates_num)):
         plt.axvline(x=date_num, color='orange', linestyle='--', linewidth=1, label=f"({i+1}) " + label)
         plt.text(date_num + 0.5, plt.ylim()[1] * 0.88, f"({i+1})", color='orange', rotation=0, verticalalignment='bottom', horizontalalignment='left')
 
-    plt.title("Average Commits Over Time")
+    plt.title("Average Churn Over Time")
     plt.xlabel("Months")
-    plt.ylabel("Average Commits")
+    plt.ylabel("Average Churn")
     plt.xticks(xquarters_numeric, [q.strftime("%Y-%m") for q in xquarters_complete_dt], rotation=45)  # Show quarters
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.show()
@@ -150,7 +139,7 @@ def plot_stats(months, avg_commits):
 if __name__ == "__main__":
     folder_path =  "../cloned_commits" #"../../old_Who-Wrote-It-Humans-or-AI/github-api/test_repo" #"../cloned_commits" #"../github-api/test_repo" # Path to your local folder of repos
     folder_stats = {}
-    merged_avg_commits = []
+    merged_avg_commits = [] #using same code from commits, but this stores churn
     merged_months = []
     for folder in os.listdir(folder_path):
         # print("date: ", folder)
