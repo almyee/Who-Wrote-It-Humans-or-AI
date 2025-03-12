@@ -7,22 +7,7 @@ from tqdm import tqdm
 import matplotlib.dates as mdates
 from matplotlib.dates import date2num
 import numpy as np
-from scipy.ndimage import gaussian_filter1d
 from collections import defaultdict
-from scipy.signal import savgol_filter
-from scipy.interpolate import interp1d
-
-
-def savgol_smoothing(y, window=7, poly_order=2):
-    return savgol_filter(y, window_length=window, polyorder=poly_order)
-
-def polynomial_fit(x, y, degree=3):
-    x_num = date2num(x)
-    coeffs = np.polyfit(x_num, y, degree)
-    poly_func = np.poly1d(coeffs)
-    return x, poly_func(x_num)  # Returns fitted y values
-
-
 
 def createMonthList(startDate: datetime, endDate: datetime, stepSize: relativedelta):
     startDate = datetime(year=startDate.year, month=startDate.month, day=1, hour=0)
@@ -82,74 +67,54 @@ def processRepositories(folderPath, timeDelta):
     # print("sorted months and got avg commits")
     return sorted_months, avg_commits
 
-def moving_average(data, window_size):
-    return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
-
 def plot_stats(months, avg_commits):
-    start_dt = datetime(2019, 10, 1)
+    start_dt = datetime(2019, 1, 1)
     end_dt = datetime(2025, 1, 1)
-    xmonths_complete_dt = []
-    current_dt = start_dt
+
     gpt_dates = [
-    ("gpt-3.5", "2022-11"),
-    ("gpt-4", "2023-03"),
-    ("gpt-4o", "2024-05")
+        ("gpt-3.5", "2022-11"),
+        ("gpt-4", "2023-03"),
+        ("gpt-4o", "2024-05")
     ]
-    gpt_dates_dt = [datetime.strptime((date[1]), "%Y-%m") for date in gpt_dates]
+    gpt_dates_dt = [datetime.strptime(date[1], "%Y-%m") for date in gpt_dates]
     gpt_dates_num = [date2num(gpt_date) for gpt_date in gpt_dates_dt]
 
+    # Generate fixed x-axis range (quarterly from 2019–2025)
+    xquarters_complete_dt = []
+    current_dt = start_dt
     while current_dt <= end_dt:
-        xmonths_complete_dt.append(current_dt)
+        xquarters_complete_dt.append(current_dt)
         current_dt += relativedelta(months=3)
     
-    xmonths_numeric = date2num(xmonths_complete_dt)
-    months_numeric = date2num(months)
+    xquarters_numeric = date2num(xquarters_complete_dt)
+
+    # Aggregate commits by quarter
+    quarterly_commits = defaultdict(list)
+    for month, commits in zip(months, avg_commits):
+        quarter_start = datetime(month.year, (month.month - 1) // 3 * 3 + 1, 1)  # Normalize to quarter start
+        quarterly_commits[quarter_start].append(commits)
     
-    valid_indices = [i for i, m in enumerate(months) if start_dt <= m <= end_dt]
-    months_filtered = [months[i] for i in valid_indices]
-    avg_commits_filtered = [avg_commits[i] for i in valid_indices]
-    
-    # Apply smoothing
-    window_size = 3  # Adjust this value for more/less smoothing
-    # avg_commits_smooth = moving_average(avg_commits_filtered, window_size)
-
-    # Adjust months to match the shorter smoothed data
-    # avg_commits_smooth2 = gaussian_filter1d(avg_commits_filtered, sigma=2)  # Adjust sigma for more/less smoothing
-    
-    if len(months_filtered) != len(avg_commits_filtered):
-        print("Error: Mismatch in the number of filtered months and commits.")
-        return
-    # Apply LOWESS smoothing
-    # smoothed_months, smoothed_avg_commits = lowess_smoothing(months_filtered, avg_commits_filtered, frac=0.2)  # Adjust frac for smoothness
-
-    # Apply Savitzky-Golay filtering
-    avg_commits_smooth = savgol_smoothing(avg_commits_filtered, window=7, poly_order=2)
-    months_smooth = months_filtered[:len(avg_commits_smooth)]
-    # Apply polynomial fit (degree 3 for a smooth curve)
-    poly_months, poly_avg_commits = polynomial_fit(months_filtered, avg_commits_filtered, degree=3)
-    # Create finer granularity for months (e.g., interpolate for monthly data)
-    # months_interpolated = np.linspace(min(months_filtered), max(months_filtered), 500)
-    # interpolated_commits = interp1d(months_filtered, avg_commits_filtered, kind='cubic')(months_interpolated)
-
-
+    # Compute quarterly averages (fill missing quarters with NaN)
+    avg_commits_by_quarter = []
+    for quarter in xquarters_complete_dt:
+        if quarter in quarterly_commits:
+            avg_commits_by_quarter.append(sum(quarterly_commits[quarter]) / len(quarterly_commits[quarter]))
+        else:
+            avg_commits_by_quarter.append(np.nan)  # Preserve gaps
 
     plt.figure(figsize=(10, 5))
-    # plt.plot(months_interpolated, interpolated_commits, label="Interpolated Commits", color='pink')
-    plt.plot(poly_months, poly_avg_commits, label="Polynomial Fit", color='red', linestyle='-', alpha=0.6, linewidth=2) #Polynomial Fit
-    # plt.plot(months_filtered, avg_commits_smooth, label="Savitzky-Golay Smoothed", color='blue', linestyle='-', alpha=0.6, linewidth=2)
-    # plt.plot(months_smooth, avg_commits_smooth, label="Average Commits", color='red', linestyle='-')
-    # plt.plot(months_filtered, avg_commits_smooth2, label="Average Commits Gaussian", color='purple', linestyle='-')
-    plt.plot(months_filtered, avg_commits_filtered, label="Average Commits", color='blue', linestyle='-', alpha=0.6, linewidth=2)
+    plt.plot(xquarters_numeric, avg_commits_by_quarter, label="Average Commits", color='blue', linestyle='-', marker='o')
+
     for i, (label, date_num) in enumerate(zip([d[0] for d in gpt_dates], gpt_dates_num)):
         plt.axvline(x=date_num, color='orange', linestyle='--', linewidth=1, label=f"({i+1}) " + label)
         plt.text(date_num + 0.5, plt.ylim()[1] * 0.88, f"({i+1})", color='orange', rotation=0, verticalalignment='bottom', horizontalalignment='left')
-    plt.title("Commits Over Time")
+
+    plt.title("Average Commits Over Time")
     plt.xlabel("Months")
-    plt.ylabel("Number of Commits")
-    plt.xticks(xmonths_numeric, [m.strftime("%Y-%m") for m in xmonths_complete_dt], rotation=45)
+    plt.ylabel("Average Commits")
+    plt.xticks(xquarters_numeric, [q.strftime("%Y-%m") for q in xquarters_complete_dt], rotation=45)  # Show quarters
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.show()
-
 
 if __name__ == "__main__":
     folder_path =   "../cloned_commits" #"../github-api/test_repo" # Path to your local folder of repos
