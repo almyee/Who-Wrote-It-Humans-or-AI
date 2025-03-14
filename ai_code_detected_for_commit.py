@@ -12,7 +12,7 @@ import uuid
 from tqdm import tqdm
 
 # List of GitHub repository URLs
-repo_urls = [
+repo_url_links = [
     "https://github.com/bitcoin/bitcoin",
     "https://github.com/google/osv.dev",
     "https://github.com/mitmproxy/mitmproxy",
@@ -120,6 +120,9 @@ def analyze_repos_for_ai(dates_to_analyze: list[datetime], repo_urls: list[str],
         - 104 Days after GPT-4 release
         - Latest commit (6 march 2025)
     """
+    # check if temp dir exists
+    if not os.path.exists(temp_dir):
+        os.mkdir(temp_dir)
     ret = []
     pbar = tqdm(repo_urls, position=0)
 
@@ -142,7 +145,7 @@ def analyze_repos_for_ai(dates_to_analyze: list[datetime], repo_urls: list[str],
         for date in dates_to_analyze:
             commit_hash = getCommitOnDate(date, repo_path)
             pbar.set_description(pbar_desc_format + f"\nDate: {date}\nCommit: {commit_hash}")
-            if commit_hash == None:
+            if commit_hash is None:
                 # print(f"Could not find commit after date: {date}")
                 ret[-1]["commits"].append({
                     "date": date,
@@ -151,10 +154,11 @@ def analyze_repos_for_ai(dates_to_analyze: list[datetime], repo_urls: list[str],
                 })
             else:
                 gr = Git(path= repo_path)
+                temp_file_path = os.path.join(temp_dir, uuid.uuid4().hex[:8]) + ".out"
                 # Try catch in case something breaks, we still need to restore git repository to master branch
                 # or sometimes pydriller can't find commits when the repo is in a detatched head mode.
                 try:
-                    temp_file_path = os.path.join(temp_dir, uuid.uuid4().hex[:8]) + ".out"
+
                     gr.reset()
 
                     # print(f"Analyzing {commit_hash} ({date})\n")
@@ -188,8 +192,6 @@ def analyze_repos_for_ai(dates_to_analyze: list[datetime], repo_urls: list[str],
 
     return ret
 
-
-
 def parseBotsnifferOutput(file_path: str) -> list[dict]:
     ret = []
     with open(file_path, "r") as file:
@@ -197,7 +199,7 @@ def parseBotsnifferOutput(file_path: str) -> list[dict]:
         if len(lines) <= 3:
             return ret
         for i in range(0, len(lines), 3):
-            if("Done!" in lines[i]):
+            if "Done!" in lines[i]:
                 break
             file_path = lines[i].split(' ', 1)[1]
             is_ai = True if "True" in lines[i + 1] else False
@@ -209,8 +211,6 @@ def parseBotsnifferOutput(file_path: str) -> list[dict]:
             })
     return ret
 
-
-
 def getCommitOnDate(date: datetime, repo_path: str) -> str | None:
     """
     Returns the first commit hash after a specified date
@@ -220,9 +220,9 @@ def getCommitOnDate(date: datetime, repo_path: str) -> str | None:
         return None
 
     # print(date)
-    endDate = date + relativedelta(days=2)
+    end_date = date + relativedelta(days=2)
     # print(repo_path)
-    for commit in Repository(path_to_repo= repo_path, since= date, to=endDate).traverse_commits():
+    for commit in Repository(path_to_repo= repo_path, since= date, to=end_date).traverse_commits():
         # print(commit)
         return commit.hash
 
@@ -236,7 +236,7 @@ def process_data(data: list[dict]) -> list[dict]:
             "commits": []
         }
         for commits in repository["commits"]:
-            if commits["found_commit"] == False:
+            if not commits["found_commit"]:
                 continue
             commit_dict = {
                 "num_files": 0,
@@ -310,7 +310,6 @@ def repo_path_generator(root_dir: str, repo_urls: list[str]):
     Yields repositories in a directory
     The nested directories must contain a .git folder
     """
-    path = os.path.abspath(root_dir)
     # print(path)
     for repo_url in repo_urls:
         if os.path.exists(dir_from_repo_url(repo_url, root_dir)):
@@ -326,14 +325,17 @@ if __name__ == "__main__":
     # test = ['tempRepos/bitcoin/bitcoin']
     # repos = list(repo_path_generator(temp_dir, repo_urls))
     commit_dates = [
+        datetime(year=2021, month=10, day= 28),
         datetime(year=2022, month=11, day=29),
         datetime(year=2023, month=3, day=13),
         datetime(year=2023, month=6, day=25),
-        datetime(year=2024, month=3, day=6)
+        datetime(year=2024, month=3, day=6),
+        datetime(year=2024, month=9, day=6),
+        datetime(year=2025, month=3, day=6)
     ]
 
 
-    data = analyze_repos_for_ai(repo_urls= repo_urls,
+    data = analyze_repos_for_ai(repo_urls= repo_url_links,
                          dates_to_analyze=commit_dates,
                          root_dir=repo_dir,
                          temp_dir= "temp_files")
