@@ -60,26 +60,50 @@ def createJobsByTimeDelta(repoPath: str, timeDelta: relativedelta, directories: 
 # Deletions: Number of lines removed.
 # Churn: Total changes (insertions + deletions).
 # Returns results grouped by time range.
-def codeChurnJob(job) -> tuple:
+# def codeChurnJob(job) -> tuple:
+#     id = job["id"]
+#     repoPath = job["directory"]
+#     dateRanges = job["dateRanges"]
+#     finishedJobs = []
+#     for (startDate, endDate) in tqdm(dateRanges, position=id, desc=f"Thread {id}: "):
+#         temp = {
+#             "id": id,
+#             "repoPath": repoPath,
+#             "startDate": startDate,
+#             "endDate": endDate,
+#             "insertions": 0,
+#             "deletions": 0,
+#             "churn": 0
+#         }
+#         for commit in Repository(path_to_repo=repoPath, since=startDate, to=endDate).traverse_commits():
+#             temp["insertions"] += commit.insertions
+#             temp["deletions"] += commit.deletions
+#         temp["churn"] = temp["insertions"] + temp["deletions"]
+#         finishedJobs.append(temp)
+#     return id, repoPath, finishedJobs
+def codeChurnJob(job):
     id = job["id"]
     repoPath = job["directory"]
     dateRanges = job["dateRanges"]
     finishedJobs = []
-    for (startDate, endDate) in tqdm(dateRanges, position=id, desc=f"Thread {id}: "):
-        temp = {
-            "id": id,
-            "repoPath": repoPath,
-            "startDate": startDate,
-            "endDate": endDate,
-            "insertions": 0,
-            "deletions": 0,
-            "churn": 0
-        }
-        for commit in Repository(path_to_repo=repoPath, since=startDate, to=endDate).traverse_commits():
-            temp["insertions"] += commit.insertions
-            temp["deletions"] += commit.deletions
-        temp["churn"] = temp["insertions"] + temp["deletions"]
-        finishedJobs.append(temp)
+    try:
+        for (startDate, endDate) in tqdm(dateRanges, position=id, desc=f"Thread {id}: "):
+            temp = {
+                "id": id,
+                "repoPath": repoPath,
+                "startDate": startDate,
+                "endDate": endDate,
+                "insertions": 0,
+                "deletions": 0,
+                "churn": 0
+            }
+            for commit in Repository(path_to_repo=repoPath, since=startDate, to=endDate).traverse_commits():
+                temp["insertions"] += commit.insertions
+                temp["deletions"] += commit.deletions
+            temp["churn"] = temp["insertions"] + temp["deletions"]
+            finishedJobs.append(temp)
+    except Exception as e:
+        print(f"Error in Thread {id}: {e}")
     return id, repoPath, finishedJobs
 
 # Orchestrates the parallel execution of codeChurnJob across multiple processes.
@@ -95,8 +119,10 @@ def codeChurnPerDelta(repoPath: str, timeDelta: relativedelta, tempDir: str, num
     # Use a safer multiprocessing context
     ctx = mp.get_context("spawn")
 
+    # with ctx.Pool(processes=numDirectories) as pool:
+    #     result = pool.map(codeChurnJob, jobs)
     with ctx.Pool(processes=numDirectories) as pool:
-        result = pool.map(codeChurnJob, jobs)
+        result = list(pool.imap_unordered(codeChurnJob, jobs))
         pool.close()  # Explicitly close the pool
         pool.join()   # Ensure all processes terminate properly
 
@@ -109,7 +135,9 @@ def createMultipleRepos(sourceDir: str, tempDir: str, numCopies: int) -> list[st
     directories = []
     for i in range(numCopies):
         tempDirName = os.path.join(tempDir, f"tempDir_{i}", ".git")
-        shutil.copytree(sourceDir, tempDirName)
+        # shutil.copytree(sourceDir, tempDirName)
+        shutil.copytree(sourceDir, tempDirName, ignore=shutil.ignore_patterns('.git'))
+
         directories.append(tempDirName)
     return directories
 
@@ -143,8 +171,8 @@ def plot_stats(months, avg_churn):
     avg_churn_filtered = [avg_churn[i] for i in valid_indices]
 
     
-    print(f"Filtered months: {len(months_filtered)}")  # Debugging line
-    print(f"Filtered avg_commits: {len(avg_churn_filtered)}")  # Debugging line
+    # print(f"Filtered months: {len(months_filtered)}")  # Debugging line
+    # print(f"Filtered avg_commits: {len(avg_churn_filtered)}")  # Debugging line
     
     if len(months_filtered) != len(avg_churn_filtered):
         print("Error: Mismatch in the number of filtered months and commits.")
@@ -152,7 +180,7 @@ def plot_stats(months, avg_churn):
     
     # Plotting
     plt.figure(figsize=(12, 6))
-    plt.plot(months_numeric, avg_churn, marker='o', label="Average Churn")  # Use numerical dates
+    plt.plot(months_numeric, avg_churn, label="Average Churn")  # Use numerical dates
 
     # Now uncomment the GPT vertical lines with the correct x-axis scale
     for i, (label, date_num) in enumerate(zip([d[0] for d in gpt_dates], gpt_dates_num)):
@@ -176,49 +204,61 @@ def plot_stats(months, avg_churn):
 # Sorts the results by date.
 # Uses matplotlib to plot code churn (total changes) over time.
 if __name__ == "__main__":
-    repoFolder = "repos/all"
-    tempDir = "repos/temp/tempDir"
-    all_repos = [os.path.join(repoFolder, d) for d in os.listdir(repoFolder) if os.path.isdir(os.path.join(repoFolder, d))]
-    combined_data = {}
+    repoFolder = "../cloned_commits" #"../github-api/test_repo"
+    tempDir = "../temp/tempDir"
 
-    for repoPath in all_repos:
-        result = codeChurnPerDelta(
-            repoPath=repoPath,
-            timeDelta=relativedelta(months=1),
-            tempDir=tempDir,
-            numDirectories=7  # One less than CPU count
-        )
-        ids, paths, data = zip(*result)
-        dataSorted = sorted([item for sublist in data for item in sublist], key=lambda x: x["startDate"])
-        for item in dataSorted:
-            month = item["startDate"].strftime("%Y-%m")
-            combined_data.setdefault(month, []).append(item["churn"])
-
-    # Compute average churn per month
-    months = sorted(combined_data.keys())
-    avg_churn = [np.mean(combined_data[month]) for month in months]
-
-    threshold_date = dt(2022, 11, 1)
-
-    # Initialize lists to hold commits before and after the threshold
-    before_nov_2022_churn = []
-    after_nov_2022_churn = []
-
-    # Split the months and avg_commits into two groups
-    for month, churn in zip(months, avg_churn):
-        # Convert the month string to a datetime object
-        month_dt = dt.strptime(month, "%Y-%m")
-        
-        # Now compare the datetime objects
-        if month_dt < threshold_date:
-            before_nov_2022_churn.append(churn)
-        else:
-            after_nov_2022_churn.append(churn)
-
-    # Calculate the average of avg_commits before and after November 2022
-    avg_before_nov_2022 = sum(before_nov_2022_churn) / len(before_nov_2022_churn) if before_nov_2022_churn else 0
-    avg_after_nov_2022 = sum(after_nov_2022_churn) / len(after_nov_2022_churn) if after_nov_2022_churn else 0
-
-    print("Avg churn before November 2022: ", avg_before_nov_2022)
-    print("Avg churn after November 2022: ", avg_after_nov_2022)
-    plot_stats(months, avg_churn)
+    # folder_path =   "../cloned_commits" #"../github-api/test_repo" # Path to your local folder of repos
+    folder_stats = {}
+    merged_avg_churn = []
+    merged_months = []
+    for folder in os.listdir(repoFolder): #folder = date
+        # print("date: ", folder)
+        merged_churn_per_date = []
+        # all_repos = [os.path.join(repoFolder, d) for d in os.listdir(repoFolder) if os.path.isdir(os.path.join(repoFolder, d))]
+        combined_data = {}
+        if (folder == ".DS_Store"):
+            continue
+        folder_full_path = os.path.join(repoFolder, folder)
+        # print("folder_full_path: ", folder_full_path)
+        for folder2 in os.listdir(folder_full_path): #folder = repo name 1
+            if (folder2 == ".DS_Store"):
+                continue
+            folder_full_path2 = os.path.join(folder_full_path, folder2)
+            # print("folder_full_path2: ", folder_full_path2)
+            for folder3 in os.listdir(folder_full_path2): #folder = repo name 2
+                if (folder3 == ".DS_Store"):
+                    continue
+                folder_full_path3 = os.path.join(folder_full_path2, folder3)
+                for folder4 in os.listdir(folder_full_path3): #folder = repo name 2
+                    if (folder4 == ".DS_Store"):
+                        continue
+                    folder_full_path4 = os.path.join(folder_full_path3, folder4)
+                    print("folder_full_path3: ", folder_full_path4)
+                    if os.path.isdir(folder_full_path3):  # Check if it's a directory
+                        result = codeChurnPerDelta(
+                            repoPath=folder_full_path4,
+                            timeDelta=relativedelta(months=1),
+                            tempDir=tempDir,
+                            numDirectories=7  # One less than CPU count
+                        )
+                        ids, paths, data = zip(*result)
+                        dataSorted = sorted([item for sublist in data for item in sublist], key=lambda x: x["startDate"])
+                        for item in dataSorted:
+                            month = item["startDate"].strftime("%Y-%m")
+                            combined_data.setdefault(month, []).append(item["churn"])
+                    # print("averaged_stats: ", avg_commits)   
+                    months = sorted(combined_data.keys())
+                    merged_months.extend(months)
+                    avg_churn = [np.mean(combined_data[month]) for month in months] #combined_data.values() #
+                    merged_avg_churn.extend(avg_churn)
+                    merged_churn_per_date.extend(avg_churn)
+                    # merged_months, merged_avg_commits = merge_averaged_stats((merged_months, merged_avg_commits), (months, avg_commits))
+        avg_churn_date = sum(merged_churn_per_date)/len(merged_churn_per_date)
+        print("avg_churn_date: ", avg_churn_date, folder)
+    # Sort merged data properly
+    if merged_months and merged_avg_churn:
+        merged_data = sorted(zip(merged_months, merged_avg_churn), key=lambda x: x[0])
+        merged_months, merged_avg_churn = zip(*merged_data)
+        merged_months = list(merged_months)
+        merged_avg_churn = list(merged_avg_churn)
+    plot_stats(merged_months, merged_avg_churn)

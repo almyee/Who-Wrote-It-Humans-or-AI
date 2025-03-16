@@ -8,6 +8,7 @@ def extract_botsniffer_metrics(text):
     Extracts metrics from a botsniffer text file.
     Adjust regex patterns as needed to match your specific output format.
     """
+    print("get metrics")
     metrics = {
         "comment_quality": [],
         "indentation_consistency": [],
@@ -36,7 +37,7 @@ def summarize_statistics(values):
     """Calculates statistical summaries including mean, median, mode, and more."""
     if not values:
         return {"mean": None, "min": None, "max": None, "std_dev": None, "count": 0, "median": None, "mode": None}
-    
+    print("summarise stats")
     return {
         "mean": round(statistics.mean(values), 2),
         "min": min(values),
@@ -49,6 +50,7 @@ def summarize_statistics(values):
 
 def process_botsniffer_folder(folder_path):
     """Processes all text files in a folder and summarizes trends across them."""
+    print("process botsniffer folder")
     trends = {
         "total_files": 0,
         "ai_generated_count": 0,
@@ -74,6 +76,7 @@ def process_botsniffer_folder(folder_path):
 
                 # Extract numerical metrics
                 file_metrics = extract_botsniffer_metrics(text)
+                print("extracted bot metrics: ", file_metrics)
                 for key in trends.keys():
                     if key in file_metrics:
                         trends[key].extend(file_metrics[key])
@@ -82,7 +85,7 @@ def process_botsniffer_folder(folder_path):
 
             except Exception as e:
                 print(f"Warning: Could not process {filename} - {e}")
-
+    print("create summary stats")
     # Compute summary statistics
     summary = {
         "AI Generated Files": trends["ai_files"],
@@ -114,9 +117,33 @@ def save_summary_to_text(summary, output_file):
                     f.write(f"  {stat_key.capitalize()}: {value}\n")
 
 # Example usage:
-folder_path = "./before_ai"  # Update this to your folder path
+folder_path = "../cloned_commits/2022-11-29"#"../../old_Who-Wrote-It-Humans-or-AI/github-api/test_repo" #"./before_ai"  # Update this to your folder path
 output_file = "summary_output.txt"
-summary = process_botsniffer_folder(folder_path)
+for folder in os.listdir(folder_path): #folder = date
+        # print("date: ", folder)
+        merged_churn_per_date = []
+        # all_repos = [os.path.join(repoFolder, d) for d in os.listdir(repoFolder) if os.path.isdir(os.path.join(repoFolder, d))]
+        combined_data = {}
+        if (folder == ".DS_Store"):
+            continue
+        folder_full_path = os.path.join(folder_path, folder)
+        # print("folder_full_path: ", folder_full_path)
+        for folder2 in os.listdir(folder_full_path): #folder = repo name 1
+            if (folder2 == ".DS_Store"):
+                continue
+            folder_full_path2 = os.path.join(folder_full_path, folder2)
+            # print("folder_full_path2: ", folder_full_path2)
+            for folder3 in os.listdir(folder_full_path2): #folder = repo name 2
+                if (folder3 == ".DS_Store"):
+                    continue
+                folder_full_path3 = os.path.join(folder_full_path2, folder3)
+                # for folder4 in os.listdir(folder_full_path3): #folder = repo name 2
+                #     if (folder4 == ".DS_Store"):
+                #         continue
+                    # folder_full_path4 = os.path.join(folder_full_path3, folder4)
+                # print("folder_full_path3: ", folder_full_path3)
+                if os.path.isdir(folder_full_path3):  # Check if it's a directory
+                    summary = process_botsniffer_folder(folder_full_path3)
 print(summary)
 save_summary_to_text(summary, output_file)
 

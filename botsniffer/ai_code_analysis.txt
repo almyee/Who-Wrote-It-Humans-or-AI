@@ -1,0 +1,15 @@
+AI-Generated Files:
+
+Keyword Analysis:
+  import: 13.03448275862069
+  from: 8.758620689655173
+  lambda: 0.3448275862068966
+  def: 6.724137931034483
+  return: 6.137931034482759
+  yield: 0.2413793103448276
+  class: 0.6896551724137931
+
+Structural Patterns:
+  External Dependencies: 1.4137931034482758
+  Functions: 0.896551724137931
+  Object-Oriented: 0.3793103448275862
